@@ -684,6 +684,8 @@ enum WaylandEvent {
     KeyUp(KeyCode, KeyMods),
     Char(char, KeyMods, bool),
     PointerMotion(f32, f32),
+    PointerEnter(f32, f32),
+    PointerLeave,
     RawMotion(f32, f32),
     PointerButton(MouseButton, bool),
     PointerAxis(f32, f32),
@@ -839,12 +841,17 @@ unsafe extern "C" fn pointer_handle_enter(
     _wl_pointer: *mut wl_pointer,
     serial: u32,
     surface: *mut wl_surface,
-    _surface_x: i32,
-    _surface_y: i32,
+    surface_x: i32,
+    surface_y: i32,
 ) {
     let display: &mut WaylandPayload = &mut *(data as *mut _);
     display.focused_window = surface;
     if surface == display.surface {
+        let scale = crate::native_display().lock().unwrap().dpi_scale;
+        let x = wl_fixed_to_double(surface_x) * scale;
+        let y = wl_fixed_to_double(surface_y) * scale;
+        display.pointer_context.position = (x, y);
+        display.events.push(WaylandEvent::PointerEnter(x, y));
         display
             .pointer_context
             .handle_enter(&mut display.client, serial);
@@ -855,10 +862,13 @@ unsafe extern "C" fn pointer_handle_leave(
     data: *mut ::core::ffi::c_void,
     _wl_pointer: *mut wl_pointer,
     _serial: u32,
-    _surface: *mut wl_surface,
+    surface: *mut wl_surface,
 ) {
     let display: &mut WaylandPayload = &mut *(data as *mut _);
     display.pointer_context.enter_serial = None;
+    if surface == display.surface {
+        display.events.push(WaylandEvent::PointerLeave);
+    }
 }
 
 unsafe extern "C" fn pointer_handle_motion(
@@ -1584,6 +1594,10 @@ where
                     WaylandEvent::Char(chr, keymods, repeat) => {
                         event_handler.char_event(chr, keymods, repeat)
                     }
+                    WaylandEvent::PointerEnter(x, y) => {
+                        event_handler.mouse_enter_event(MouseButton::Unknown, x, y)
+                    }
+                    WaylandEvent::PointerLeave => event_handler.mouse_leave_event(),
                     WaylandEvent::PointerMotion(x, y) => {
                         event_handler.mouse_motion_event(x, y);
                     }

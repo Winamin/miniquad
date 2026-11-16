@@ -1288,6 +1288,14 @@ var importObject = {
             resize(canvas);
         },
         run_animation_loop: function (blocking) {
+            canvas.addEventListener("pointerleave", function (event) {
+                if (event.pointerType === "mouse") wasm_exports.mouse_leave();
+            });
+            canvas.addEventListener("pointerenter", function (event) {
+                if (event.pointerType !== "mouse") return;
+                var pos = mouse_relative_position(event.clientX, event.clientY);
+                wasm_exports.mouse_enter(pos.x, pos.y);
+            });
             canvas.onmousemove = function (event) {
                 var relative_position = mouse_relative_position(event.clientX, event.clientY);
                 var x = relative_position.x;

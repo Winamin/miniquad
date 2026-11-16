@@ -480,6 +480,27 @@ unsafe extern "system" fn win32_wndproc(
                 }
             }
         }
+        WM_POINTERENTER | WM_POINTERLEAVE => {
+            let pointer_id = LOWORD(wparam as DWORD) as u32;
+            let mut pointer_type = 0;
+            if GetPointerType(pointer_id, &mut pointer_type) != 0 && pointer_type == PT_MOUSE {
+                if umsg == WM_POINTERLEAVE {
+                    event_handler.mouse_leave_event();
+                } else {
+                    let mut info: POINTER_INFO = std::mem::zeroed();
+                    if GetPointerInfo(pointer_id, &mut info) != 0 {
+                        let (x, y) =
+                            convert_to_absolute(hwnd, info.ptPixelLocationRaw.x, info.ptPixelLocationRaw.y);
+                        event_handler.mouse_enter_event(
+                            MouseButton::Unknown,
+                            x * payload.mouse_scale,
+                            y * payload.mouse_scale,
+                        );
+                    }
+                }
+                payload.update_requested = true;
+            }
+        }
         WM_POINTERDOWN | WM_POINTERUPDATE | WM_POINTERUP => {
             let pointer_id = LOWORD(wparam as u32) as u32;
             let mut entries_count = 0u32;

@@ -419,6 +419,18 @@ pub extern "C" fn touch(phase: u32, id: u32, x: f32, y: f32) {
 }
 
 #[no_mangle]
+pub extern "C" fn mouse_leave() {
+    tl_event_handler(|event_handler| event_handler.mouse_leave_event());
+}
+
+#[no_mangle]
+pub extern "C" fn mouse_enter(x: f32, y: f32) {
+    tl_event_handler(|event_handler| {
+        event_handler.mouse_enter_event(crate::MouseButton::Unknown, x, y)
+    });
+}
+
+#[no_mangle]
 pub extern "C" fn focus(has_focus: bool) {
     tl_event_handler(|event_handler| {
         if has_focus {

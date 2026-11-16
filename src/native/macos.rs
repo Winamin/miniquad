@@ -613,6 +613,26 @@ unsafe fn view_base_decl(decl: &mut ClassDecl) {
         }
     }
 
+    extern "C" fn mouse_entered(this: &Object, _sel: Sel, event: ObjcId) {
+        let payload = get_window_payload(this);
+        unsafe {
+            let point: NSPoint = msg_send!(event, locationInWindow);
+            let point = payload.transform_mouse_point(&point);
+            if let Some(event_handler) = payload.context() {
+                event_handler.mouse_enter_event(MouseButton::Unknown, point.0, point.1);
+            }
+        }
+        payload.update_requested = true;
+    }
+
+    extern "C" fn mouse_exited(this: &Object, _sel: Sel, _event: ObjcId) {
+        let payload = get_window_payload(this);
+        if let Some(event_handler) = payload.context() {
+            event_handler.mouse_leave_event();
+        }
+        payload.update_requested = true;
+    }
+
     fn fire_mouse_event(this: &Object, event: ObjcId, down: bool, btn: MouseButton) {
         let payload = get_window_payload(this);
 
@@ -1076,6 +1096,14 @@ unsafe fn view_base_decl(decl: &mut ClassDecl) {
     decl.add_method(
         sel!(resetCursorRects),
         reset_cursor_rects as extern "C" fn(&Object, Sel),
+    );
+    decl.add_method(
+        sel!(mouseEntered:),
+        mouse_entered as extern "C" fn(&Object, Sel, ObjcId),
+    );
+    decl.add_method(
+        sel!(mouseExited:),
+        mouse_exited as extern "C" fn(&Object, Sel, ObjcId),
     );
     decl.add_method(
         sel!(mouseMoved:),
@@ -1741,6 +1769,19 @@ where
     }
 
     let () = msg_send![window, setContentView: view];
+    // InVisibleRect follows resize; 0x400 enables notifications during mouse drags.
+    let bounds: NSRect = msg_send![view, bounds];
+    let tracking: ObjcId = msg_send![class!(NSTrackingArea), alloc];
+    let tracking: ObjcId = msg_send![tracking,
+        initWithRect: bounds
+        options: (NSTrackignActiveAlways | NSTrackingInVisibleRect
+            | NSTrackingMouseEnteredAndExited | 0x400u64)
+        owner: view
+        userInfo: nil
+    ];
+    let () = msg_send![view, addTrackingArea: tracking];
+    // The view retains the tracking area.
+    let () = msg_send![tracking, release];
     let () = msg_send![window, makeFirstResponder: view];
 
     let _ = display.update_dimensions();
