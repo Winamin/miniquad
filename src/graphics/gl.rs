@@ -521,6 +521,11 @@ impl Textures {
             },
             #[cfg(target_vendor = "apple")]
             TextureIdInner::Raw(RawId::Metal(..)) => panic!("Metal texture in OpenGL context!"),
+            #[cfg(all(
+                feature = "vulkan",
+                any(windows, all(target_os = "linux", not(target_env = "ohos")))
+            ))]
+            TextureIdInner::Raw(RawId::Vulkan(_)) => panic!("Vulkan image passed to OpenGL"),
             TextureIdInner::Managed(texture) => self.0[texture],
         }
     }
