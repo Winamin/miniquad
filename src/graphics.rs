@@ -1248,6 +1248,8 @@ pub trait RenderingBackend {
     }
     /// For depth-only render pass returns empty slice.
     fn render_pass_color_attachments(&self, render_pass: RenderPass) -> &[TextureId];
+    fn render_pass_resolve_texture(&self, _render_pass: RenderPass) -> Option<TextureId> { None }
+    /// Delete the pass only. Attachment textures remain owned by the caller.
     fn delete_render_pass(&mut self, render_pass: RenderPass);
     fn new_pipeline(
         &mut self,

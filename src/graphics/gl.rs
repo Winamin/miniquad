@@ -1159,6 +1159,12 @@ impl RenderingBackend for GlContext {
     fn render_pass_color_attachments(&self, render_pass: RenderPass) -> &[TextureId] {
         &self.passes[render_pass.0].color_textures
     }
+    fn render_pass_resolve_texture(&self, pass: RenderPass) -> Option<TextureId> {
+        self.passes[pass.0].resolves.as_ref().map(|resolves| {
+            assert_eq!(resolves.len(), 1, "multiple resolve attachments");
+            resolves[0].1
+        })
+    }
     fn delete_render_pass(&mut self, render_pass: RenderPass) {
         let pass_id = render_pass.0;
 
@@ -1166,17 +1172,8 @@ impl RenderingBackend for GlContext {
 
         unsafe { glDeleteFramebuffers(1, &render_pass.gl_fb as *const _) }
 
-        for color_texture in &render_pass.color_textures {
-            self.delete_texture(*color_texture);
-        }
         if let Some(resolves) = render_pass.resolves {
-            for (fb, texture) in resolves {
-                unsafe { glDeleteFramebuffers(1, &fb as *const _) }
-                self.delete_texture(texture);
-            }
-        }
-        if let Some(depth_texture) = render_pass.depth_texture {
-            self.delete_texture(depth_texture);
+            for (fb, _) in resolves { unsafe { glDeleteFramebuffers(1, &fb); } }
         }
     }
 
