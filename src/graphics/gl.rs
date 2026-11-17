@@ -511,7 +511,7 @@ pub(crate) struct RenderPassInternal {
     depth_texture: Option<TextureId>,
 }
 
-struct Textures(Vec<Texture>);
+struct Textures(ResourceManager<Texture>);
 impl Textures {
     fn get(&self, texture: TextureId) -> Texture {
         match texture.0 {
@@ -566,7 +566,7 @@ impl GlContext {
                 pipelines: ResourceManager::default(),
                 passes: ResourceManager::default(),
                 buffers: ResourceManager::default(),
-                textures: Textures(vec![]),
+                textures: Textures(ResourceManager::default()),
                 info,
                 cache: GlCache {
                     stored_index_buffer: 0,
@@ -926,12 +926,11 @@ impl RenderingBackend for GlContext {
         params: TextureParams,
     ) -> TextureId {
         let texture = Texture::new(self, access, source, params);
-        self.textures.0.push(texture);
-        TextureId(TextureIdInner::Managed(self.textures.0.len() - 1))
+        TextureId(TextureIdInner::Managed(self.textures.0.add(texture)))
     }
 
     fn delete_texture(&mut self, texture: TextureId) {
-        //self.cache.clear_texture_bindings();
+        self.cache.clear_texture_bindings();
 
         let t = self.textures.get(texture);
         match &t.raw {
@@ -941,6 +940,9 @@ impl RenderingBackend for GlContext {
             TextureOrRenderbuffer::Renderbuffer(raw) => unsafe {
                 glDeleteRenderbuffers(1, raw as *const _);
             },
+        }
+        if let TextureIdInner::Managed(id) = texture.0 {
+            self.textures.0.remove(id);
         }
     }
 
