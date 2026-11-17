@@ -12,6 +12,8 @@ mod event;
 pub mod fs;
 pub mod graphics;
 pub mod native;
+#[cfg(feature = "tracy")]
+pub mod tracy;
 use std::collections::HashMap;
 use std::ops::{Index, IndexMut};
 

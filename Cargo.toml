@@ -20,6 +20,10 @@ categories = ["rendering::graphics-api"]
 # Optional log-rs like macros implementation
 # disabled by default
 log-impl = []
+tracy = ["dep:tracy-client"]
+
+[dependencies]
+tracy-client = { version = "0.19.0", optional = true, default-features = false, features = ["enable", "ondemand", "only-localhost", "demangle"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = "0.2"
