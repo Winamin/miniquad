@@ -93,7 +93,7 @@ impl From<TextureFormat> for (GLenum, GLenum, GLenum) {
         match format {
             TextureFormat::RGB8 => (GL_RGB, GL_RGB, GL_UNSIGNED_BYTE),
             TextureFormat::RGBA8 => (GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE),
-            TextureFormat::RGBA16F => (GL_RGBA16F, GL_RGBA, GL_FLOAT),
+            TextureFormat::RGBA16F => (GL_RGBA16F, GL_RGBA, GL_HALF_FLOAT),
             TextureFormat::Depth => (GL_DEPTH_COMPONENT, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT),
             TextureFormat::Depth32 => (GL_DEPTH_COMPONENT, GL_DEPTH_COMPONENT, GL_FLOAT),
             #[cfg(target_arch = "wasm32")]
@@ -409,6 +409,10 @@ impl Texture {
 
     /// Read texture data into CPU memory
     pub fn read_pixels(&self, bytes: &mut [u8]) {
+        assert!(
+            bytes.len() >= self.size(self.params.width, self.params.height),
+            "texture_read_pixels destination is too small"
+        );
         let raw = self
             .raw
             .texture()
@@ -419,12 +423,19 @@ impl Texture {
         let mut fbo = 0;
         unsafe {
             let mut binded_fbo: i32 = 0;
+            let mut pack_alignment: i32 = 0;
             glGetIntegerv(gl::GL_DRAW_FRAMEBUFFER_BINDING, &mut binded_fbo);
+            glGetIntegerv(gl::GL_PACK_ALIGNMENT, &mut pack_alignment);
+            glPixelStorei(gl::GL_PACK_ALIGNMENT, 1);
             glGenFramebuffers(1, &mut fbo);
             glBindFramebuffer(gl::GL_FRAMEBUFFER, fbo);
             glFramebufferTexture2D(
                 gl::GL_FRAMEBUFFER,
-                gl::GL_COLOR_ATTACHMENT0,
+                if matches!(self.params.format, TextureFormat::Depth | TextureFormat::Depth32) {
+                    gl::GL_DEPTH_ATTACHMENT
+                } else {
+                    gl::GL_COLOR_ATTACHMENT0
+                },
                 gl::GL_TEXTURE_2D,
                 raw,
                 0,
@@ -441,13 +452,17 @@ impl Texture {
             );
 
             glBindFramebuffer(gl::GL_FRAMEBUFFER, binded_fbo as _);
+            glPixelStorei(gl::GL_PACK_ALIGNMENT, pack_alignment);
             glDeleteFramebuffers(1, &fbo);
         }
     }
 
     #[inline]
     fn size(&self, width: u32, height: u32) -> usize {
-        self.params.format.size(width, height) as usize
+        (width as usize)
+            .checked_mul(height as usize)
+            .and_then(|pixels| pixels.checked_mul(self.params.format.size(1, 1) as usize))
+            .expect("texture byte size exceeds address space")
     }
 
     fn gl_filter(filter: FilterMode, mipmap_filter: MipmapFilterMode) -> GLenum {
