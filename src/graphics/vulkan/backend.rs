@@ -483,7 +483,6 @@ impl RenderingBackend for VulkanBackend {
         module.descriptor_set_layout = vk::DescriptorSetLayout::null();
         module.pipeline_layout = vk::PipelineLayout::null();
         module.uniform_offsets = Vec::new();
-        module.uniform_values = Vec::new();
         module.images = Vec::new();
         module.float_vertex_locations = Default::default();
         ctx.free_shaders.push(shader.0);

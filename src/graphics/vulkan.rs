@@ -43,12 +43,16 @@ pub(crate) struct PendingDescriptors {
     /// dynamic rendering instance, so their layout transition is recorded once
     /// the pass has ended.
     pub sampled: Vec<usize>,
+    /// Slice of the frame's uniform arena holding the values written since the
+    /// last draw call.
+    pub uniform_offset: Option<vk::DeviceSize>,
 }
 
 impl PendingDescriptors {
     pub fn clear(&mut self) {
         self.images.clear();
         self.sampled.clear();
+        self.uniform_offset = None;
     }
 }
 

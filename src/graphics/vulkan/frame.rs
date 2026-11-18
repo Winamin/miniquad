@@ -1208,6 +1208,7 @@ impl VulkanContext {
     pub fn apply_pipeline(&mut self, pipeline: &Pipeline) {
         self.cur_pipeline = Some(*pipeline);
         self.cur_params = self.pipelines[pipeline.0].params;
+        self.pending.uniform_offset = None;
     }
 
     pub fn set_cull_face(&mut self, cull_face: CullFace) {
@@ -1337,10 +1338,28 @@ impl VulkanContext {
             return;
         }
 
-        // Preserve the latest program values independently of frame storage.
-        // Every draw snapshots them into its own slice of the uniform arena.
+        let offset = match self.pending.uniform_offset {
+            Some(offset) => offset,
+            None => {
+                let offset = self.allocate_uniforms(buffer_size);
+                unsafe {
+                    ptr::write_bytes(
+                        self.uniform_arenas[self.current_frame]
+                            .mapped
+                            .add(offset as usize),
+                        0,
+                        buffer_size as usize,
+                    );
+                }
+                self.pending.uniform_offset = Some(offset);
+                offset
+            }
+        };
+
         unsafe {
-            let mapped = self.shaders[shader].uniform_values.as_mut_ptr();
+            let mapped = self.uniform_arenas[self.current_frame]
+                .mapped
+                .add(offset as usize);
             for (tight, std140, element, stride, count) in &self.shaders[shader].uniform_offsets {
                 assert!(
                     *tight as usize + *count as usize * *element as usize <= size,
@@ -1423,16 +1442,22 @@ impl VulkanContext {
         let uniform_offset = if uniforms_size == 0 {
             None
         } else {
-            let offset = self.allocate_uniforms(uniforms_size);
-            unsafe {
-                ptr::copy_nonoverlapping(
-                    self.shaders[shader_index].uniform_values.as_ptr(),
-                    self.uniform_arenas[self.current_frame]
-                        .mapped
-                        .add(offset as usize),
-                    uniforms_size as usize,
-                );
-            }
+            let offset = match self.pending.uniform_offset {
+                Some(offset) => offset,
+                None => {
+                    let offset = self.allocate_uniforms(uniforms_size);
+                    unsafe {
+                        ptr::write_bytes(
+                            self.uniform_arenas[self.current_frame]
+                                .mapped
+                                .add(offset as usize),
+                            0,
+                            uniforms_size as usize,
+                        );
+                    }
+                    offset
+                }
+            };
             Some(offset)
         };
 
@@ -1542,6 +1567,7 @@ impl VulkanContext {
             );
         }
         self.cmd_dirty = true;
+        self.pending.uniform_offset = None;
     }
 
     pub fn commit_frame(&mut self) {}

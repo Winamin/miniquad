@@ -22,8 +22,6 @@ pub struct ShaderModule {
     /// `(tight offset, std140 offset, element size, std140 stride, element count)`
     /// per uniform in `ShaderMeta` declaration order.
     pub uniform_offsets: Vec<(u32, u32, u32, u32, u32)>,
-    /// Uniform values persist per shader, as they do for OpenGL programs.
-    pub(crate) uniform_values: Vec<u8>,
     pub images: Vec<String>,
     pub float_vertex_locations: BTreeSet<u32>,
 }
@@ -435,7 +433,6 @@ impl VulkanContext {
                 pipeline_layout,
                 uniforms_size: uniforms_size as vk::DeviceSize,
                 uniform_offsets,
-                uniform_values: vec![0; uniforms_size as usize],
                 images: meta.images,
                 float_vertex_locations,
             };
