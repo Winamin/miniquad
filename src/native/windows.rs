@@ -1436,7 +1436,11 @@ where
                 }
             };
             let mut msg: MSG = std::mem::zeroed();
-            let block_on_wait = conf.platform.blocking_event_loop && !display.update_requested;
+            // A minimized Vulkan surface may not return a swapchain image.
+            // Keep processing messages until restore instead of blocking the
+            // window thread inside acquisition/presentation.
+            let block_on_wait = (vulkan && display.iconified)
+                || (conf.platform.blocking_event_loop && !display.update_requested);
             if block_on_wait {
                 GetMessageW(&mut msg as *mut _ as _, NULL as _, 0, 0);
                 dispatch_message(msg);
@@ -1457,7 +1461,9 @@ where
                     .unwrap()
                     .resize_event(width, height);
             }
-            if !conf.platform.blocking_event_loop || display.update_requested {
+            if (!vulkan || !display.iconified)
+                && (!conf.platform.blocking_event_loop || display.update_requested)
+            {
                 display.update_requested = false;
                 display.event_handler.as_mut().unwrap().update();
                 display.event_handler.as_mut().unwrap().draw();
