@@ -193,12 +193,6 @@ impl VulkanContext {
         }
         uniform.offset = 0;
         stream.offset = 0;
-        for buffer in &mut self.buffers {
-            if buffer.updated.is_some() {
-                buffer.current_buffer = vk::Buffer::null();
-                buffer.current_offset = 0;
-            }
-        }
     }
 
     fn restart_command_buffer(&self, command_buffer: vk::CommandBuffer) {
@@ -1420,10 +1414,6 @@ impl VulkanContext {
         }
         let pipeline = self.cur_pipeline.expect("Drawing without a bound pipeline");
         let index_buffer = self.cur_index_buffer.expect("Unset index buffer");
-        self.prepare_buffer(index_buffer);
-        for index in 0..self.cur_vertex_buffers.len() {
-            self.prepare_buffer(self.cur_vertex_buffers[index].expect("Unbound vertex buffer"));
-        }
         let shader_index = self.pipelines[pipeline.0].shader;
         let color_formats = self.cur_color_formats.clone();
         let screen = self.cur_target.is_none();
@@ -1468,12 +1458,20 @@ impl VulkanContext {
             image_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
         };
         let index = &self.buffers[index_buffer];
+        assert!(
+            index.current_buffer != vk::Buffer::null(),
+            "Buffer has been deleted"
+        );
         let index_type = index.index_type.expect("Unset index buffer type");
         let (vertex_buffers, vertex_offsets) = self
             .cur_vertex_buffers
             .iter()
             .map(|slot| {
                 let buffer = &self.buffers[slot.expect("Unbound vertex buffer")];
+                assert!(
+                    buffer.current_buffer != vk::Buffer::null(),
+                    "Buffer has been deleted"
+                );
                 (buffer.current_buffer, buffer.current_offset)
             })
             .unzip();

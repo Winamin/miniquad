@@ -51,9 +51,6 @@ pub struct BufferModule {
     pub current_offset: vk::DeviceSize,
     pub index_type: Option<IndexType>,
     pub widen: bool,
-    // The dedicated buffer keeps its initial data. Updated data is retained on
-    // the CPU and copied into frame storage when a draw first uses that version.
-    pub(crate) updated: Option<Vec<u8>>,
 }
 
 pub struct TextureModule {
@@ -768,7 +765,6 @@ impl VulkanContext {
                     }
                 }),
                 widen: index_type == Some(IndexType::Byte),
-                updated: None,
             };
             let index = if let Some(index) = self.free_buffers.pop() {
                 self.buffers[index] = module;
@@ -807,50 +803,16 @@ impl VulkanContext {
     }
 
     pub fn update_buffer(&mut self, index: usize, data: *const u8, size: usize) {
-        if size == 0 {
-            return;
-        }
-        let module = &self.buffers[index];
         assert!(
-            module.buffer != vk::Buffer::null(),
+            self.buffers[index].buffer != vk::Buffer::null(),
             "Buffer has been deleted"
         );
-        if module.updated.is_none() {
-            let previous = unsafe {
-                let mapped = self
-                    .device
-                    .map_memory(module.memory, 0, module.size, vk::MemoryMapFlags::empty())
-                    .unwrap();
-                let previous =
-                    std::slice::from_raw_parts(mapped as *const u8, module.size as usize).to_vec();
-                self.device.unmap_memory(module.memory);
-                previous
-            };
-            self.buffers[index].updated = Some(previous);
-        }
-        let module = &mut self.buffers[index];
-        let wide;
-        let data = if module.widen {
-            wide = widen_indices(data, size);
-            &wide[..]
+        let (buffer, offset) = if self.buffers[index].widen {
+            let wide = widen_indices(data, size);
+            self.append_stream(wide.as_ptr(), wide.len())
         } else {
-            unsafe { std::slice::from_raw_parts(data, size) }
+            self.append_stream(data, size)
         };
-        module.updated.as_mut().unwrap()[..data.len()].copy_from_slice(data);
-        module.current_buffer = vk::Buffer::null();
-    }
-
-    pub(crate) fn prepare_buffer(&mut self, index: usize) {
-        let module = &self.buffers[index];
-        assert!(
-            module.buffer != vk::Buffer::null(),
-            "Buffer has been deleted"
-        );
-        if module.current_buffer != vk::Buffer::null() {
-            return;
-        }
-        let data = module.updated.as_ref().unwrap();
-        let (buffer, offset) = self.append_stream(data.as_ptr(), data.len());
         let module = &mut self.buffers[index];
         module.current_buffer = buffer;
         module.current_offset = offset;
@@ -911,7 +873,6 @@ impl VulkanContext {
             self.device.free_memory(self.buffers[index].memory, None);
             self.buffers[index].buffer = vk::Buffer::null();
             self.buffers[index].memory = vk::DeviceMemory::null();
-            self.buffers[index].updated = None;
             self.buffers[index].current_buffer = vk::Buffer::null();
             self.free_buffers.push(index);
             if self.cur_index_buffer == Some(index) {
