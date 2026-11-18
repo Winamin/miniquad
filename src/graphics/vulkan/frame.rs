@@ -1163,28 +1163,21 @@ impl VulkanContext {
     /// not transition on the application's behalf.
     fn transition_attachments(&mut self, pass: usize) {
         let module = self.passes[pass]
-            .as_ref()
+            .take()
             .expect("the render pass has been deleted");
-
-        let indexes: Vec<_> = module
-            .colors
-            .iter()
-            .chain(module.resolves.iter().flatten())
-            .copied()
-            .collect();
-        let depth = module.depth;
-        for texture in &indexes {
+        for texture in module.colors.iter().chain(module.resolves.iter().flatten()) {
             self.transition_pass_texture(
                 texture.texture as usize,
                 vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
             );
         }
-        if let Some(depth) = depth {
+        if let Some(depth) = module.depth {
             self.transition_pass_texture(
                 depth.texture as usize,
                 vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
             );
         }
+        self.passes[pass] = Some(module);
     }
 
     pub fn clear(
@@ -1198,7 +1191,7 @@ impl VulkanContext {
         }
         let viewport = self.viewport;
         let scissor = self.scissor;
-        let pending = self.pending.clone();
+        let pending = std::mem::take(&mut self.pending);
         self.begin_pass(
             self.cur_target.map(RenderPass),
             PassAction::Clear {
@@ -1415,7 +1408,6 @@ impl VulkanContext {
         let pipeline = self.cur_pipeline.expect("Drawing without a bound pipeline");
         let index_buffer = self.cur_index_buffer.expect("Unset index buffer");
         let shader_index = self.pipelines[pipeline.0].shader;
-        let color_formats = self.cur_color_formats.clone();
         let screen = self.cur_target.is_none();
         let mut params = self.cur_params;
         if !screen {
@@ -1426,13 +1418,7 @@ impl VulkanContext {
                 FrontFaceOrder::CounterClockwise => FrontFaceOrder::Clockwise,
             };
         }
-        let vk_pipeline = self.pipeline_for_target(
-            pipeline,
-            &color_formats,
-            self.cur_samples,
-            self.cur_depth_format,
-            params,
-        );
+        let vk_pipeline = self.pipeline_for_current_target(pipeline, params);
         let uniforms_size = self.shaders[shader_index].uniforms_size;
         let uniform_offset = if uniforms_size == 0 {
             None

@@ -522,6 +522,23 @@ impl VulkanContext {
         created
     }
 
+    pub(crate) fn pipeline_for_current_target(
+        &mut self,
+        pipeline: Pipeline,
+        params: PipelineParams,
+    ) -> vk::Pipeline {
+        let color_formats = std::mem::take(&mut self.cur_color_formats);
+        let created = self.pipeline_for_target(
+            pipeline,
+            &color_formats,
+            self.cur_samples,
+            self.cur_depth_format,
+            params,
+        );
+        self.cur_color_formats = color_formats;
+        created
+    }
+
     fn create_graphics_pipeline(
         &self,
         shader: usize,
